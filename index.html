@@ -9,7 +9,8 @@
       --ui-bg: rgba(20,20,20,.8);
       --ui-fg:#fff;
       --accent:#7dd3fc;
-      --btn-border:#333; /* 버튼 테두리 통일 */
+      --btn-border:#333;
+      --x-nudge-y: -1.5px
     }
     *{ box-sizing:border-box; font-weight:inherit; }
     html,body{
@@ -18,7 +19,10 @@
       font-weight:700;
       -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
     }
-    .wrap{ position:relative; width:100%; height:100%; overflow:hidden; background:#000; }
+
+    /* 주소창 변동 대응 */
+    .wrap{ position:relative; width:100%; height:100svh; overflow:hidden; background:#000; }
+
     video#video{
       position:absolute; inset:0; margin:auto; width:100%; height:100%; object-fit:cover;
       transform: scaleX(-1); filter:brightness(.9) contrast(1.1) saturate(1.05);
@@ -28,12 +32,13 @@
 
     /* 상단: 좌 상태, 우 도움말 */
     .topline{
-      position:absolute; top:12px; left:12px; right:12px;
-      display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:start; /* 8px로 균일 조정 */
+      position:absolute; top:12px;
+      left:max(12px, env(safe-area-inset-left));
+      right:max(12px, env(safe-area-inset-right));
+      display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:start;
       pointer-events:none;
     }
 
-    /* 상태 박스: 내부도 8px 간격 */
     .status{
       display:inline-flex; flex-direction:column; gap:8px;
       background:var(--ui-bg); color:var(--ui-fg);
@@ -49,18 +54,37 @@
 
     /* 도움말 패널 */
     .help{
+      position:relative;
       background:var(--ui-bg); color:var(--ui-fg);
-      padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.45;
+      padding:12px 14px; border-radius:12px; font-size:12px; line-height:1.45;
       max-width:min(420px,34vw); backdrop-filter: blur(8px);
       pointer-events:auto;
     }
     .help pre{ margin:0; font:inherit; white-space:pre-wrap; }
+    .help-close{
+      position:absolute; top:6px; right:6px; width:26px; height:26px;
+      display:none; /* 기본(PC 포함) 숨김 */
+      align-items:center; justify-content:center; border-radius:999px;
+      background:transparent; color:#fff; border:1px solid var(--btn-border);
+      line-height:1;
+      cursor:pointer;
+    }
+    
+    .help-close::before{
+      content:"×";
+      display:inline-block;
+      font-size:16px;
+      transform: translateY(var(--x-nudge-y)); 
+    }
 
     .toolbar{
-      position:absolute; left:50%; transform:translateX(-50%); bottom:16px;
-      display:flex; gap:10px; align-items:center;
+      position:absolute; left:50%; transform:translateX(-50%);
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      display:flex; gap:10px; align-items:center; justify-content:center;
       background:var(--ui-bg); color:var(--ui-fg); padding:10px 12px; border-radius:14px;
       backdrop-filter: blur(10px); box-shadow: 0 6px 20px rgba(0,0,0,.35); user-select:none;
+      max-width:min(96vw, 960px);
+      flex-wrap:nowrap;
     }
     .colors{display:flex; gap:6px;}
     .swatch{
@@ -69,8 +93,10 @@
     }
     .swatch.active{ outline-color:var(--accent) }
     .group{display:flex;gap:8px;align-items:center}
+    .group.size{}
+    .group.actions{}
     .btn{ height:32px; padding:0 10px; border-radius:10px; background:#111; color:#fff; border:1px solid var(--btn-border); cursor:pointer; }
-    .btn.ghost{ background:transparent; border:1px solid var(--btn-border); } /* 테두리 색 통일 */
+    .btn.ghost{ background:transparent; border:1px solid var(--btn-border); }
     .btn.toggled{ outline:2px solid var(--accent); outline-offset:2px; }
     .slider{ width:120px; accent-color:var(--accent); }
     .sep{width:1px;height:22px;background:#444; margin:0 4px}
@@ -78,11 +104,54 @@
       position:absolute; width:14px;height:14px;border:2px solid #fff;border-radius:50%; pointer-events:none;
       transform:translate(-50%,-50%); mix-blend-mode:difference;
     }
+
+    /* 작은 화면 기본 */
     @media (max-width: 1024px){ }
     @media (max-width: 720px){
       .slider{ width:90px }
-      .help{ display:none } /* 작은 화면에서는 숨김 */
+      .help{ display:none } /* 기본 숨김(모바일은 i 버튼으로 토글) */
     }
+
+    /* ===== 모바일 모드(UA/폭 감지로 body.mobile 추가) ===== */
+    body.mobile .topline{
+      grid-template-columns:1fr; justify-items:center; /* CAM/LIB/MODEL/HANDS 중앙 */
+    }
+    body.mobile .status{ text-align:center; }
+
+    /* 8px 라벨 중앙 & 구분선 제거 & 버튼 한 줄 */
+    body.mobile .toolbar{
+      gap:8px; padding:8px 10px; border-radius:12px; max-width:min(96vw, 720px); flex-wrap:wrap;
+      font-size:12px;
+    }
+    body.mobile .group.size{ flex:0 0 100%; justify-content:center; } /* 슬라이더+8px 중앙 */
+    body.mobile .sep{ display:none; } /* 모바일에서 | 제거 */
+    body.mobile .group.actions{ flex-wrap:nowrap; white-space:nowrap; } /* 버튼 한 줄 강제 */
+    body.mobile .btn{ height:30px; padding:0 8px; font-size:12px; }
+
+    /* 도움말 아이콘: 모바일에서 우하단 */
+    .info-btn{
+      position:absolute; z-index:60;
+      width:36px; height:36px; border-radius:999px;
+      background:var(--ui-bg); color:#fff; border:1px solid var(--btn-border);
+      display:none; align-items:center; justify-content:center; font-weight:900;
+      pointer-events:auto; backdrop-filter:blur(8px);
+      top:12px; right:max(12px, env(safe-area-inset-right)); /* 기본(데스크톱) */
+    }
+    body.mobile .info-btn{
+      top:auto;
+      right:max(16px, env(safe-area-inset-right));
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      display:flex;
+    }
+
+    /* 도움말 모달: 중앙 + 모바일에서만 X 보임 */
+    body.mobile .help{ display:none !important; }
+    body.mobile .help.show{
+      display:block !important; position:fixed; z-index:70;
+      left:50%; top:50%; transform:translate(-50%,-50%);
+      width:min(88vw, 420px); max-width:420px; max-height:70vh; overflow:auto;
+    }
+    body.mobile .help.show .help-close{ display:flex; } /* 모바일+열림일 때만 X 보임 */
   </style>
 </head>
 <body>
@@ -90,7 +159,7 @@
   <video id="video" autoplay playsinline muted></video>
   <canvas id="paint"></canvas>
 
-  <!-- 상단 UI: 상태(좌) | 도움말(우) -->
+  <!-- 상단 UI -->
   <div class="topline">
     <div class="status" id="statusBox">
       <div class="row">
@@ -105,6 +174,7 @@
     <div></div>
 
     <div class="help" id="helpPanel">
+      <button class="help-close" id="helpClose" aria-label="도움말 닫기" title="닫기"></button>
       <pre><span style="color: #ffd400;">손동작 안내</span>
 • 엄지+검지: 그리기
 • 엄지+중지: 지우개 토글
@@ -113,18 +183,26 @@
     </div>
   </div>
 
+  <!-- 모바일: 도움말 토글 i 버튼 (우하단) -->
+  <button id="infoBtn" class="info-btn" aria-label="도움말" title="도움말">i</button>
+
   <!-- 손가락 위치 표시용 커서 -->
   <div class="cursor" id="cursor0" hidden></div>
   <div class="cursor" id="cursor1" hidden></div>
 
   <div class="toolbar">
     <div class="group colors" id="colors"></div>
-    <div class="group">
+
+    <!-- 슬라이더 그룹: 중앙 정렬 위해 .size 클래스 부여 -->
+    <div class="group size">
       <input type="range" id="size" class="slider" min="1" max="100" value="8" />
       <span id="sizeLabel">8px</span>
     </div>
+
     <div class="sep"></div>
-    <div class="group">
+
+    <!-- 버튼 묶음: 한 줄 유지 위해 .actions 클래스 부여 -->
+    <div class="group actions">
       <button class="btn" id="eraserBtn" title="E">지우개</button>
       <button class="btn ghost" id="undoBtn" title="U">되돌리기</button>
       <button class="btn ghost" id="clearBtn">초기화</button>
@@ -134,11 +212,13 @@
 </div>
 
 <script type="module">
+/* 기본 참조 */
 const el = (id)=>document.getElementById(id);
 const video = el('video'), paint = el('paint');
 const sCam = el('sCam'), sLib=el('sLib'), sModel=el('sModel'), sTrack=el('sTrack'), sMsg=el('sMsg');
 const colorsEl = el('colors'), sizeEl=el('size'), sizeLabel=el('sizeLabel');
 const eraserBtn = el('eraserBtn'), undoBtn=el('undoBtn'), clearBtn=el('clearBtn'), saveBtn=el('saveBtn');
+const helpPanel = el('helpPanel'), infoBtn = el('infoBtn'), helpClose = el('helpClose');
 const cursors = [el('cursor0'), el('cursor1')];
 
 const DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -163,13 +243,17 @@ let MP=null, FilesetResolver=null, HandLandmarker=null, handLandmarker=null;
 let running = false;
 let lastVideoTime = -1;
 
+/* 캔버스 크기(주소창/회전 대응) */
 function setCanvasSize(){
-  const rect = paint.getBoundingClientRect();
-  W = Math.floor(rect.width);
-  H = Math.floor(rect.height);
+  const wrap = document.getElementById('app');
+  const vw = wrap.clientWidth;
+  const vh = (window.visualViewport ? window.visualViewport.height : wrap.clientHeight);
+  W = Math.floor(vw);
+  H = Math.floor(vh);
   paint.width = Math.floor(W*DPR);
   paint.height = Math.floor(H*DPR);
-  paint.getContext('2d').setTransform(DPR,0,0,DPR,0,0);
+  const ctx = paint.getContext('2d');
+  ctx.setTransform(DPR,0,0,DPR,0,0);
 }
 window.addEventListener('resize', setCanvasSize);
 
@@ -196,12 +280,15 @@ document.addEventListener('keydown',(e)=>{
   if(e.key==='s'||e.key==='S') saveBtn.click();
   if(e.key===']'){ sizeEl.value=Math.min(100, parseInt(sizeEl.value,10)+1); sizeEl.dispatchEvent(new Event('input')); }
   if(e.key==='['){ sizeEl.value=Math.max(1, parseInt(sizeEl.value,10)-1); sizeEl.dispatchEvent(new Event('input')); }
-  if(e.key==='h'||e.key==='H'){
-    const help=document.querySelector('.help');
-    const disp = getComputedStyle(help).display;
-    help.style.display = (disp==='none' ? 'block' : 'none');
-  }
 });
+
+/* 도움말 토글 */
+if (infoBtn && helpPanel){
+  infoBtn.addEventListener('click', ()=> helpPanel.classList.toggle('show'));
+}
+if (helpClose){
+  helpClose.addEventListener('click', ()=> helpPanel.classList.remove('show'));
+}
 
 /* Drawing core */
 function beginStrokeKey(key,p){
@@ -246,14 +333,14 @@ function cycleColor(){
 function cursorMove(i,p){ const c=cursors[i]; if(!c) return; c.hidden=false; c.style.left=p.x+'px'; c.style.top=p.y+'px'; }
 function hideCursors(){ for(const c of cursors){ c.hidden=true; } }
 
-/* Mouse fallback */
+/* 마우스 대체 */
 let mouseDown=false;
 paint.addEventListener('pointerdown',(e)=>{ if(handLandmarker) return; mouseDown=true; beginStrokeKey('mouse', getPointer(e)); });
 paint.addEventListener('pointermove',(e)=>{ if(handLandmarker) return; const p=getPointer(e); cursorMove(0,p); if(mouseDown) addPointKey('mouse', p); });
 window.addEventListener('pointerup',()=>{ if(handLandmarker) return; if(mouseDown){ endStrokeKey('mouse'); mouseDown=false; } });
 function getPointer(e){ const r=paint.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
 
-/* Camera */
+/* 카메라 */
 async function initCam(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:{ideal:1280}, height:{ideal:720}}, audio:false});
@@ -267,7 +354,7 @@ async function initCam(){
   }
 }
 
-/* MediaPipe load */
+/* MediaPipe */
 async function loadLib(){
   const bases=[
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18",
@@ -316,7 +403,7 @@ async function loadLib(){
   }
 }
 
-/* Helpers */
+/* Helper */
 function normToCanvas(xNorm,yNorm){
   const x = (mirror? (1-xNorm) : xNorm) * W;
   const y = yNorm * H;
@@ -340,7 +427,7 @@ function markTracking(n){
   sTrack.className = 'pill '+(n>0?'ok':(handLandmarker?'warn':'bad'));
 }
 
-/* Main loop */
+/* 루프 */
 function step(){
   if(!running) return;
   const now = performance.now();
@@ -390,7 +477,21 @@ function step(){
   (video.requestVideoFrameCallback ? video.requestVideoFrameCallback(step) : requestAnimationFrame(step));
 }
 
-/* Boot */
+/* 모바일 감지 & 레이아웃 */
+const isMobile = (() => {
+  const ua = navigator.userAgent || navigator.vendor || window.opera;
+  const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(ua) || (touch && Math.min(window.innerWidth, window.innerHeight) < 820);
+})();
+if (isMobile) { document.body.classList.add('mobile'); }
+
+/* viewport 변화/회전 대응 */
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => setCanvasSize());
+}
+window.addEventListener('orientationchange', () => setTimeout(setCanvasSize, 250));
+
+/* 부팅 */
 (async function main(){
   setCanvasSize();
   await initCam();
