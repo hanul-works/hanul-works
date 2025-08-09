@@ -26,7 +26,7 @@
     }
     canvas#paint{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
 
-    /* 상단: 좌 상태, 중앙(삭제됨 자리), 우 도움말 */
+    /* 상단: 좌 상태, 우 도움말 */
     .topline{
       position:absolute; top:12px; left:12px; right:12px;
       display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:start; /* 8px로 균일 조정 */
@@ -90,7 +90,7 @@
   <video id="video" autoplay playsinline muted></video>
   <canvas id="paint"></canvas>
 
-  <!-- 상단 UI: 상태(좌) | (중앙 배너 삭제) | 도움말(우) -->
+  <!-- 상단 UI: 상태(좌) | 도움말(우) -->
   <div class="topline">
     <div class="status" id="statusBox">
       <div class="row">
@@ -102,7 +102,6 @@
       <div class="msg" id="sMsg">초기화 중…</div>
     </div>
 
-    <!-- 중앙 배너 제거: 의도적으로 비워둠 -->
     <div></div>
 
     <div class="help" id="helpPanel">
