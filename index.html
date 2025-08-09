@@ -1,422 +1,404 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>허공필(虛空筆) — Hand Pinch Draw</title>
+  <meta charset="utf-8" />
+  <title>유한울 매뉴팩처링</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <style>
-    :root {
-      --panel: rgba(24,24,24,.8);
-      --accent: #fff;
-      --muted: #bbb;
+    :root{
+      --ui-bg: rgba(20,20,20,.8);
+      --ui-fg:#fff;
+      --accent:#7dd3fc;
+      --btn-border:#333; /* 버튼 테두리 통일 */
     }
-    * { box-sizing: border-box; }
-    html, body { height:100%; margin:0; background:#000; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
-    .app { display:grid; grid-template-rows:auto 1fr auto; height:100%; }
-    header { padding:8px 12px; display:flex; align-items:center; gap:12px; }
-    header .dot { width:8px; height:8px; border-radius:50%; background:#16a34a; }
-    header .status { font-size:14px; color:var(--muted); }
-    main { position: relative; display:flex; justify-content:center; align-items:center; padding:8px; }
-    /* 비디오와 캔버스는 같은 래퍼 안에서 좌우반전 동기화 */
-    .stage { position:relative; width:min(92vw, 960px); aspect-ratio:4/3; background:#111; border-radius:12px; overflow:hidden; }
-    .mirror { transform: scaleX(-1); transform-origin:center; }
-    video, canvas { position:absolute; inset:0; width:100%; height:100%; }
-    #video { object-fit:cover; }
-    #overlay { pointer-events:none; }
-    #draw { pointer-events:none; }
-    /* 우상단 도움말 */
-    .help {
-      position:absolute; right:12px; top:12px; padding:10px 12px; background:var(--panel);
-      border:1px solid rgba(255,255,255,.12); border-radius:12px; font-size:13px; line-height:1.5;
-      backdrop-filter: blur(6px);
+    *{ box-sizing:border-box; font-weight:inherit; }
+    html,body{
+      height:100%; margin:0; background:#000; color:#fff;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Inter,Apple SD Gothic Neo,"Noto Sans KR",sans-serif;
+      font-weight:700;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
     }
-    .help b { display:block; margin-bottom:6px; font-weight:700; color:#fff; }
-    /* 좌측 상단 툴 상태 */
-    .tool {
-      position:absolute; left:12px; top:12px; padding:8px 10px; background:var(--panel);
-      border:1px solid rgba(255,255,255,.12); border-radius:12px; font-size:13px; display:flex; gap:10px; align-items:center; backdrop-filter: blur(6px);
+    .wrap{ position:relative; width:100%; height:100%; overflow:hidden; background:#000; }
+    video#video{
+      position:absolute; inset:0; margin:auto; width:100%; height:100%; object-fit:cover;
+      transform: scaleX(-1); filter:brightness(.9) contrast(1.1) saturate(1.05);
+      opacity:.25; pointer-events:none;
     }
-    .pill { padding:2px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.14); }
-    .on { background:#fff; color:#000; }
-    footer {
-      display:flex; gap:8px; padding:10px; justify-content:center; align-items:center; background:transparent;
+    canvas#paint{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+
+    /* 상단: 좌 상태, 중앙(삭제됨 자리), 우 도움말 */
+    .topline{
+      position:absolute; top:12px; left:12px; right:12px;
+      display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:start; /* 8px로 균일 조정 */
+      pointer-events:none;
     }
-    button {
-      background:#1f1f1f; color:#fff; border:1px solid rgba(255,255,255,.12);
-      padding:10px 14px; border-radius:10px; font-size:14px; cursor:pointer;
+
+    /* 상태 박스: 내부도 8px 간격 */
+    .status{
+      display:inline-flex; flex-direction:column; gap:8px;
+      background:var(--ui-bg); color:var(--ui-fg);
+      padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.4;
+      backdrop-filter: blur(8px);
+      pointer-events:auto;
     }
-    button:hover { background:#262626; }
-    .hint { font-size:12px; color:var(--muted); text-align:center; margin:2px 0 10px; }
+    .status .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .status .msg{ opacity:.95; }
+
+    .pill{ display:inline-block; padding:2px 6px; border-radius:999px; }
+    .ok{background:#073}.warn{background:#735d00}.bad{background:#600}
+
+    /* 도움말 패널 */
+    .help{
+      background:var(--ui-bg); color:var(--ui-fg);
+      padding:10px 12px; border-radius:12px; font-size:12px; line-height:1.45;
+      max-width:min(420px,34vw); backdrop-filter: blur(8px);
+      pointer-events:auto;
+    }
+    .help pre{ margin:0; font:inherit; white-space:pre-wrap; }
+
+    .toolbar{
+      position:absolute; left:50%; transform:translateX(-50%); bottom:16px;
+      display:flex; gap:10px; align-items:center;
+      background:var(--ui-bg); color:var(--ui-fg); padding:10px 12px; border-radius:14px;
+      backdrop-filter: blur(10px); box-shadow: 0 6px 20px rgba(0,0,0,.35); user-select:none;
+    }
+    .colors{display:flex; gap:6px;}
+    .swatch{
+      width:22px;height:22px;border-radius:50%; cursor:pointer; border:2px solid rgba(255,255,255,.6);
+      outline:2px solid transparent; outline-offset:2px;
+    }
+    .swatch.active{ outline-color:var(--accent) }
+    .group{display:flex;gap:8px;align-items:center}
+    .btn{ height:32px; padding:0 10px; border-radius:10px; background:#111; color:#fff; border:1px solid var(--btn-border); cursor:pointer; }
+    .btn.ghost{ background:transparent; border:1px solid var(--btn-border); } /* 테두리 색 통일 */
+    .btn.toggled{ outline:2px solid var(--accent); outline-offset:2px; }
+    .slider{ width:120px; accent-color:var(--accent); }
+    .sep{width:1px;height:22px;background:#444; margin:0 4px}
+    .cursor{
+      position:absolute; width:14px;height:14px;border:2px solid #fff;border-radius:50%; pointer-events:none;
+      transform:translate(-50%,-50%); mix-blend-mode:difference;
+    }
+    @media (max-width: 1024px){ }
+    @media (max-width: 720px){
+      .slider{ width:90px }
+      .help{ display:none } /* 작은 화면에서는 숨김 */
+    }
   </style>
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="dot" id="camDot"></div>
-      <div class="status" id="status">카메라 초기화 중…</div>
-    </header>
+<div class="wrap" id="app">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="paint"></canvas>
 
-    <main>
-      <div class="stage">
-        <!-- 좌우반전은 같은 그룹에 함께 적용 -->
-        <video id="video" class="mirror" autoplay playsinline muted></video>
-        <!-- 드로잉 캔버스(사용자 그림), 오버레이 캔버스(골격/보조선) -->
-        <canvas id="draw" class="mirror"></canvas>
-        <canvas id="overlay" class="mirror"></canvas>
-
-        <div class="tool" id="toolPanel">
-          <span class="pill" id="modePill">모드: 드로잉</span>
-          <span class="pill" id="colorPill">색상</span>
-          <span class="pill" id="eraserPill">지우개: OFF</span>
-        </div>
-
-        <div class="help">
-          <b>제스처</b>
-          • 엄지+검지: 드로잉<br/>
-          • 엄지+중지: 지우개 토글<br/>
-          • 엄지+약지: 되돌리기<br/>
-          • 엄지+소지: 색상 순환
-        </div>
+  <!-- 상단 UI: 상태(좌) | (중앙 배너 삭제) | 도움말(우) -->
+  <div class="topline">
+    <div class="status" id="statusBox">
+      <div class="row">
+        <span class="pill ok" id="sCam">CAM?</span>
+        <span class="pill bad" id="sLib">LIB</span>
+        <span class="pill bad" id="sModel">MODEL</span>
+        <span class="pill bad" id="sTrack">HANDS:0</span>
       </div>
-    </main>
+      <div class="msg" id="sMsg">초기화 중…</div>
+    </div>
 
-    <div class="hint">거리가 너무 멀면 손 인식이 약해져요. 화면 중앙, 어깨~가슴 높이에서 해보세요.</div>
+    <!-- 중앙 배너 제거: 의도적으로 비워둠 -->
+    <div></div>
 
-    <footer>
-      <button id="undoBtn">되돌리기</button>
-      <button id="clearBtn">초기화</button>
-      <button id="saveBtn">저장</button>
-    </footer>
+    <div class="help" id="helpPanel">
+      <pre><span style="color: #ffd400;">손동작 안내</span>
+• 엄지+검지: 그리기
+• 엄지+중지: 지우개 토글
+• 엄지+약지: 되돌리기
+• 엄지+소지: 색상 순환</pre>
+    </div>
   </div>
 
-  <script type="module">
-    // Mediapipe Tasks Vision (ESM)
-    import {
-      FilesetResolver,
-      HandLandmarker,
-      DrawingUtils
-    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.js";
+  <!-- 손가락 위치 표시용 커서 -->
+  <div class="cursor" id="cursor0" hidden></div>
+  <div class="cursor" id="cursor1" hidden></div>
 
-    const statusEl = document.getElementById("status");
-    const camDot = document.getElementById("camDot");
-    const video = document.getElementById("video");
-    const overlay = document.getElementById("overlay");
-    const octx = overlay.getContext("2d");
-    const draw = document.getElementById("draw");
-    const dctx = draw.getContext("2d");
+  <div class="toolbar">
+    <div class="group colors" id="colors"></div>
+    <div class="group">
+      <input type="range" id="size" class="slider" min="1" max="100" value="8" />
+      <span id="sizeLabel">8px</span>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button class="btn" id="eraserBtn" title="E">지우개</button>
+      <button class="btn ghost" id="undoBtn" title="U">되돌리기</button>
+      <button class="btn ghost" id="clearBtn">초기화</button>
+      <button class="btn" id="saveBtn" title="S">저장</button>
+    </div>
+  </div>
+</div>
 
-    const undoBtn = document.getElementById("undoBtn");
-    const clearBtn = document.getElementById("clearBtn");
-    const saveBtn = document.getElementById("saveBtn");
-    const modePill = document.getElementById("modePill");
-    const eraserPill = document.getElementById("eraserPill");
-    const colorPill = document.getElementById("colorPill");
+<script type="module">
+const el = (id)=>document.getElementById(id);
+const video = el('video'), paint = el('paint');
+const sCam = el('sCam'), sLib=el('sLib'), sModel=el('sModel'), sTrack=el('sTrack'), sMsg=el('sMsg');
+const colorsEl = el('colors'), sizeEl=el('size'), sizeLabel=el('sizeLabel');
+const eraserBtn = el('eraserBtn'), undoBtn=el('undoBtn'), clearBtn=el('clearBtn'), saveBtn=el('saveBtn');
+const cursors = [el('cursor0'), el('cursor1')];
 
-    // 색상 팔레트(쨍한 컬러)
-    const COLORS = ["#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#0fd1ff", "#007aff", "#af52de", "#ff2d55"];
-    let colorIndex = 0;
-    function cycleColor() {
-      colorIndex = (colorIndex + 1) % COLORS.length;
-      colorPill.style.background = COLORS[colorIndex];
-      colorPill.style.color = "#000";
-    }
-    cycleColor();
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+let W=0, H=0;
 
-    // 상태
-    let handLandmarker = null;
-    let runningMode = "VIDEO";
-    let lastVideoTime = -1;
+/* Drawing State */
+const palette = ['#ffffff','#ff4d4d','#ffd400','#00e676','#00b0ff','#7c4dff','#ff6ec7','#ff8a00'];
+let colorIdx = 0;
+let brushSize = parseInt(sizeEl.value,10);
+let erasing = false;
 
-    // 두 손 동시 지원을 위한 상태(핸드별)
-    const handState = [
-      { drawing:false, prevPinch:null }, // left or right #0
-      { drawing:false, prevPinch:null }  // #1
+let strokes = [];
+const currentStroke = {};
+const lastPt = {};
+const lastPinch = {};
+const firedOnce = new Map();
+const SMOOTH = 0.5;
+const mirror = true;
+
+/* MediaPipe */
+let MP=null, FilesetResolver=null, HandLandmarker=null, handLandmarker=null;
+let running = false;
+let lastVideoTime = -1;
+
+function setCanvasSize(){
+  const rect = paint.getBoundingClientRect();
+  W = Math.floor(rect.width);
+  H = Math.floor(rect.height);
+  paint.width = Math.floor(W*DPR);
+  paint.height = Math.floor(H*DPR);
+  paint.getContext('2d').setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', setCanvasSize);
+
+/* UI */
+palette.forEach((c,i)=>{
+  const b=document.createElement('button');
+  b.className='swatch'+(i===0?' active':''); b.style.background=c; b.title=c;
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+    b.classList.add('active'); colorIdx=i; erasing=false; eraserBtn.classList.toggle('toggled', erasing);
+  });
+  colorsEl.appendChild(b);
+});
+sizeEl.addEventListener('input', ()=>{ brushSize=parseInt(sizeEl.value,10); sizeLabel.textContent=brushSize+'px'; });
+eraserBtn.addEventListener('click', ()=>{ erasing=!erasing; eraserBtn.classList.toggle('toggled', erasing); });
+undoBtn.addEventListener('click', undo);
+clearBtn.addEventListener('click', ()=>{ strokes=[]; redrawAll(); });
+saveBtn.addEventListener('click', savePNG);
+
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='e'||e.key==='E') eraserBtn.click();
+  if(e.key==='u'||e.key==='U') undo();
+  if(e.key==='c'||e.key==='C') cycleColor();
+  if(e.key==='s'||e.key==='S') saveBtn.click();
+  if(e.key===']'){ sizeEl.value=Math.min(100, parseInt(sizeEl.value,10)+1); sizeEl.dispatchEvent(new Event('input')); }
+  if(e.key==='['){ sizeEl.value=Math.max(1, parseInt(sizeEl.value,10)-1); sizeEl.dispatchEvent(new Event('input')); }
+  if(e.key==='h'||e.key==='H'){
+    const help=document.querySelector('.help');
+    const disp = getComputedStyle(help).display;
+    help.style.display = (disp==='none' ? 'block' : 'none');
+  }
+});
+
+/* Drawing core */
+function beginStrokeKey(key,p){
+  const stroke={points:[p], color:palette[colorIdx], size:brushSize, tool: erasing?'erase':'draw'};
+  strokes.push(stroke);
+  currentStroke[key]=stroke;
+  drawDot(p, stroke);
+}
+function addPointKey(key,p){
+  const sm = smooth(lastPt[key], p); lastPt[key]=sm;
+  if(!currentStroke[key]){ beginStrokeKey(key, sm); return; }
+  currentStroke[key].points.push(sm);
+  const pts=currentStroke[key].points;
+  drawSegment(pts[pts.length-2], sm, currentStroke[key]);
+}
+function endStrokeKey(key){ currentStroke[key]=null; lastPt[key]=null; }
+function smooth(a,b){ if(!a) return b; return {x:a.x*(1-SMOOTH)+b.x*SMOOTH, y:a.y*(1-SMOOTH)+b.y*SMOOTH}; }
+function ctxFor(stroke){
+  const ctx = paint.getContext('2d');
+  ctx.lineJoin = ctx.lineCap = 'round';
+  ctx.lineWidth = stroke.size;
+  if(stroke.tool==='erase'){ ctx.globalCompositeOperation='destination-out'; ctx.strokeStyle='rgba(0,0,0,1)'; }
+  else { ctx.globalCompositeOperation='source-over'; ctx.strokeStyle=stroke.color; }
+  return ctx;
+}
+function drawDot(p, stroke){ const ctx=ctxFor(stroke); ctx.beginPath(); ctx.arc(p.x,p.y, stroke.size*0.5, 0, Math.PI*2); ctx.fillStyle = (stroke.tool==='erase'?'rgba(0,0,0,1)':stroke.color); ctx.fill(); }
+function drawSegment(a,b,stroke){ const ctx=ctxFor(stroke); ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+function redrawAll(){
+  const ctx=paint.getContext('2d'); ctx.clearRect(0,0,W,H);
+  for(const s of strokes){
+    if(s.points.length===1){ drawDot(s.points[0], s); continue; }
+    for(let i=1;i<s.points.length;i++){ drawSegment(s.points[i-1], s.points[i], s); }
+  }
+}
+function undo(){ if(strokes.length===0) return; strokes.pop(); redrawAll(); }
+function savePNG(){ const a=document.createElement('a'); a.download='hand-draw.png'; a.href=paint.toDataURL('image/png'); a.click(); }
+function cycleColor(){
+  colorIdx=(colorIdx+1)%palette.length;
+  document.querySelectorAll('.swatch').forEach((s,i)=>s.classList.toggle('active', i===colorIdx));
+  erasing=false; eraserBtn.classList.remove('toggled');
+}
+function cursorMove(i,p){ const c=cursors[i]; if(!c) return; c.hidden=false; c.style.left=p.x+'px'; c.style.top=p.y+'px'; }
+function hideCursors(){ for(const c of cursors){ c.hidden=true; } }
+
+/* Mouse fallback */
+let mouseDown=false;
+paint.addEventListener('pointerdown',(e)=>{ if(handLandmarker) return; mouseDown=true; beginStrokeKey('mouse', getPointer(e)); });
+paint.addEventListener('pointermove',(e)=>{ if(handLandmarker) return; const p=getPointer(e); cursorMove(0,p); if(mouseDown) addPointKey('mouse', p); });
+window.addEventListener('pointerup',()=>{ if(handLandmarker) return; if(mouseDown){ endStrokeKey('mouse'); mouseDown=false; } });
+function getPointer(e){ const r=paint.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+
+/* Camera */
+async function initCam(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:{ideal:1280}, height:{ideal:720}}, audio:false});
+    video.srcObject = stream;
+    sCam.textContent='CAM OK'; sCam.className='pill ok';
+    sMsg.textContent = '카메라 연결됨';
+    await video.play();
+  }catch(e){
+    sCam.textContent='CAM ERR'; sCam.className='pill bad';
+    sMsg.textContent = '카메라 접근 실패: '+e.message;
+  }
+}
+
+/* MediaPipe load */
+async function loadLib(){
+  const bases=[
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18",
+    "https://unpkg.com/@mediapipe/tasks-vision@0.10.18"
+  ];
+  let baseOk=null;
+  for(const base of bases){
+    try{ const mod=await import(base); MP=mod; FilesetResolver=mod.FilesetResolver; HandLandmarker=mod.HandLandmarker; baseOk=base; break; }
+    catch(e){ console.warn('Lib load failed from', base, e); }
+  }
+  if(!baseOk){
+    sLib.textContent='LIB ERR'; sLib.className='pill bad';
+    sMsg.textContent='라이브러리 로드 실패(CDN 차단 가능).';
+    return false;
+  }
+  sLib.textContent='LIB OK'; sLib.className='pill ok';
+  sMsg.textContent='라이브러리 로드됨';
+  try{
+    const resolver = await FilesetResolver.forVisionTasks(baseOk + "/wasm");
+    const models=[
+      "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker_lite/float16/1/hand_landmarker_lite.task"
     ];
-    let eraserOn = false;
-
-    // 스트로크 히스토리(Undo 지원)
-    const strokes = []; // {points:[{x,y}], color, size, erase:boolean}
-    const brushSize = 4;
-    const eraserSize = 24;
-
-    // 유틸
-    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-
-    function fitCanvases() {
-      // 비디오 메타데이터 로드 후 실제 크기에 맞춰 캔버스 크기 설정
-      const rect = video.getBoundingClientRect();
-      const width = overlay.width = draw.width = rect.width;
-      const height = overlay.height = draw.height = rect.height;
-      // 캔버스 스케일이 CSS와 동일하도록 DPI 반영
-      const dpr = window.devicePixelRatio || 1;
-      overlay.width = Math.round(width * dpr);
-      overlay.height = Math.round(height * dpr);
-      draw.width = Math.round(width * dpr);
-      draw.height = Math.round(height * dpr);
-      overlay.style.width = draw.style.width = width + "px";
-      overlay.style.height = draw.style.height = height + "px";
-      octx.setTransform(dpr,0,0,dpr,0,0);
-      dctx.setTransform(dpr,0,0,dpr,0,0);
+    let lastErr=null;
+    for(const m of models){
+      try{
+        handLandmarker = await HandLandmarker.createFromOptions(resolver,{
+          baseOptions:{ modelAssetPath:m },
+          numHands:2,
+          runningMode:"VIDEO",
+          minTrackingConfidence:0.5,
+          minDetectionConfidence:0.5
+        });
+        break;
+      }catch(e){ lastErr=e; }
     }
+    if(!handLandmarker) throw lastErr || new Error('모델 로드 실패');
+    sModel.textContent='MODEL OK'; sModel.className='pill ok';
+    sMsg.textContent='모델 로드됨';
+    return true;
+  }catch(e){
+    console.warn(e);
+    sModel.textContent='MODEL ERR'; sModel.className='pill bad';
+    sMsg.textContent='모델 로드 실패(CDN/네트워크 문제일 수 있음)';
+    return false;
+  }
+}
 
-    async function setupCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: {ideal: 1280}, height: {ideal: 960} },
-        audio: false
-      });
-      video.srcObject = stream;
-      return new Promise((resolve) => {
-        video.onloadedmetadata = () => {
-          video.play();
-          camDot.style.background = "#16a34a";
-          resolve();
-        };
-      });
-    }
+/* Helpers */
+function normToCanvas(xNorm,yNorm){
+  const x = (mirror? (1-xNorm) : xNorm) * W;
+  const y = yNorm * H;
+  return {x,y};
+}
+function pinchGesture(lms){
+  const tips=[8,12,16,20]; const thumb=lms[4];
+  let minX=1,minY=1,maxX=0,maxY=0;
+  for(const p of lms){ minX=Math.min(minX,p.x); minY=Math.min(minY,p.y); maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); }
+  const diag=Math.hypot(maxX-minX, maxY-minY);
+  const thr=Math.max(0.06, Math.min(0.18, diag*0.17));
+  let best={name:null, d:999};
+  for(const t of tips){
+    const d=Math.hypot(lms[t].x-thumb.x, lms[t].y-thumb.y);
+    if(d<best.d){ best={name:(t===8?'index':t===12?'middle':t===16?'ring':'pinky'), d}; }
+  }
+  return best.d < thr ? best.name : null;
+}
+function markTracking(n){
+  sTrack.textContent = `HANDS:${n}`;
+  sTrack.className = 'pill '+(n>0?'ok':(handLandmarker?'warn':'bad'));
+}
 
-    async function setupHandLandmarker() {
-      statusEl.textContent = "모델 로드 중…";
-      const filesetResolver = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
-      );
+/* Main loop */
+function step(){
+  if(!running) return;
+  const now = performance.now();
+  if(video.readyState>=2){
+    const vt=video.currentTime;
+    if(vt !== lastVideoTime && handLandmarker){
+      lastVideoTime = vt;
+      const res = handLandmarker.detectForVideo(video, now);
+      const n = (res?.landmarks?.length)||0;
+      markTracking(n);
 
-      handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
-        baseOptions: {
-          // 구글 공식 호스팅 모델(.task)
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
-        },
-        runningMode,
-        numHands: 2,
-        minHandDetectionConfidence: 0.6,
-        minHandPresenceConfidence: 0.6,
-        minTrackingConfidence: 0.5
-      });
+      hideCursors();
+      if(n>0){
+        for(let i=0;i<n;i++){
+          const raw = res.landmarks[i];
+          const key = (res.handednesses?.[i]?.[0]?.categoryName) || `H${i}`;
 
-      statusEl.textContent = "준비 완료. 손을 화면에 보여주세요!";
-    }
+          const pIdx = normToCanvas(raw[8].x, raw[8].y);
+          cursorMove(i, pIdx);
 
-    function renderOverlay(results) {
-      octx.clearRect(0,0,overlay.width, overlay.height);
-      const drawer = new DrawingUtils(octx);
+          const pinch = pinchGesture(raw);
+          if(pinch){
+            if(pinch !== lastPinch[key]){
+              if(!firedOnce.has(key)) firedOnce.set(key, new Set());
+              const once = firedOnce.get(key);
+              if(pinch==='middle' && !once.has('eraser')){ erasing=!erasing; eraserBtn.classList.toggle('toggled', erasing); once.add('eraser'); }
+              if(pinch==='ring' && !once.has('undo')){ undo(); once.add('undo'); }
+              if(pinch==='pinky' && !once.has('color')){ cycleColor(); once.add('color'); }
+            }
+            lastPinch[key]=pinch;
 
-      if (!results || !results.landmarks) return;
-
-      results.landmarks.forEach((lm, idx) => {
-        // landmark는 정규화 좌표(0~1) → 픽셀로 변환
-        // DrawingUtils가 자동으로 처리하므로 그대로 사용
-        drawer.drawConnectors(lm, HandLandmarker.HAND_CONNECTIONS, { lineWidth: 2 });
-        drawer.drawLandmarks(lm, { radius: 2.2 });
-      });
-    }
-
-    function normalizedToPixel(point) {
-      // 비디오 요소의 실제 렌더 크기 기준
-      const rect = video.getBoundingClientRect();
-      return { x: point.x * rect.width, y: point.y * rect.height };
-    }
-
-    function palmWidthNorm(lm) {
-      // 손바닥 폭 (index mcp 5) ~ (pinky mcp 17) 사이 거리 (정규화 좌표 기준)
-      const a = lm[5], b = lm[17];
-      if (!a || !b) return 0.1;
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    }
-
-    function detectPinchType(lm) {
-      // 엄지(4)와 각 손가락 끝(8,12,16,20) 거리 기반
-      const thumb = lm[4];
-      const idx = lm[8], mid = lm[12], ring = lm[16], pinky = lm[20];
-      if (!thumb || !idx || !mid || !ring || !pinky) return null;
-
-      const base = palmWidthNorm(lm);
-      const th = Math.max(0.03, base * 0.33); // 손 크기에 따른 가변 임계치
-
-      const dI = Math.hypot(thumb.x - idx.x, thumb.y - idx.y);
-      const dM = Math.hypot(thumb.x - mid.x, thumb.y - mid.y);
-      const dR = Math.hypot(thumb.x - ring.x, thumb.y - ring.y);
-      const dP = Math.hypot(thumb.x - pinky.x, thumb.y - pinky.y);
-
-      const map = [
-        {type:"index", d:dI},
-        {type:"middle", d:dM},
-        {type:"ring", d:dR},
-        {type:"pinky", d:dP},
-      ].sort((a,b)=>a.d-b.d);
-
-      if (map[0].d < th) return map[0].type;
-      return null;
-    }
-
-    function pushStrokePoint(x, y, color, size, erase=false) {
-      // 현재 stroke가 없거나 모드 변경 시 새로 시작
-      if (!strokes.length || strokes[strokes.length-1]._sealed) {
-        strokes.push({ points: [], color, size, erase, _sealed:false });
-      }
-      const s = strokes[strokes.length-1];
-      // 모드가 다르면 새 스트로크
-      if (s.erase !== erase || s.color !== color || s.size !== size) {
-        s._sealed = true;
-        strokes.push({ points: [], color, size, erase, _sealed:false });
-      }
-      strokes[strokes.length-1].points.push({x, y});
-      redrawStrokes();
-    }
-
-    function sealStroke() {
-      if (strokes.length) strokes[strokes.length-1]._sealed = true;
-    }
-
-    function redrawStrokes() {
-      dctx.clearRect(0,0,draw.width, draw.height);
-      for (const s of strokes) {
-        dctx.save();
-        dctx.lineCap = "round";
-        dctx.lineJoin = "round";
-        dctx.lineWidth = s.size;
-        if (s.erase) {
-          dctx.globalCompositeOperation = "destination-out";
-          dctx.strokeStyle = "rgba(0,0,0,1)";
-        } else {
-          dctx.globalCompositeOperation = "source-over";
-          dctx.strokeStyle = s.color;
-        }
-
-        if (s.points.length === 1) {
-          const p = s.points[0];
-          dctx.beginPath();
-          dctx.arc(p.x, p.y, s.size/2, 0, Math.PI*2);
-          dctx.fillStyle = dctx.strokeStyle;
-          dctx.fill();
-        } else if (s.points.length > 1) {
-          dctx.beginPath();
-          dctx.moveTo(s.points[0].x, s.points[0].y);
-          for (let i=1;i<s.points.length;i++){
-            dctx.lineTo(s.points[i].x, s.points[i].y);
-          }
-          dctx.stroke();
-        }
-        dctx.restore();
-      }
-    }
-
-    function undo() {
-      // 마지막 스트로크 하나 제거
-      strokes.pop();
-      redrawStrokes();
-    }
-
-    function clearAll() {
-      strokes.length = 0;
-      dctx.clearRect(0,0,draw.width, draw.height);
-    }
-
-    function savePNG() {
-      // 배경을 포함해 합성 저장
-      const tmp = document.createElement("canvas");
-      tmp.width = draw.width;
-      tmp.height = draw.height;
-      const tctx = tmp.getContext("2d");
-      // 배경 검정
-      tctx.fillStyle = "#000"; tctx.fillRect(0,0,tmp.width,tmp.height);
-      // 드로잉만 복사
-      tctx.drawImage(draw, 0, 0);
-      const url = tmp.toDataURL("image/png");
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "hand-pinch-draw.png";
-      a.click();
-    }
-
-    undoBtn.onclick = () => undo();
-    clearBtn.onclick = () => { clearAll(); };
-    saveBtn.onclick = () => savePNG();
-
-    function setEraser(on) {
-      eraserOn = on;
-      eraserPill.textContent = "지우개: " + (on ? "ON" : "OFF");
-      eraserPill.classList.toggle("on", on);
-      modePill.textContent = "모드: " + (on ? "지우개" : "드로잉");
-      modePill.classList.toggle("on", !on);
-    }
-
-    async function main() {
-      try {
-        await setupCamera();
-        statusEl.textContent = "카메라 연결됨";
-        fitCanvases();
-        window.addEventListener("resize", fitCanvases);
-      } catch(e) {
-        statusEl.textContent = "카메라 권한이 필요합니다.";
-        camDot.style.background = "#ef4444";
-        console.error(e);
-        return;
-      }
-
-      try {
-        await setupHandLandmarker();
-      } catch(e) {
-        statusEl.textContent = "모델 로드 실패. 네트워크를 확인하세요.";
-        console.error(e);
-        return;
-      }
-
-      // 프레임 루프
-      const loop = () => {
-        if (!handLandmarker) return;
-        const now = performance.now();
-        if (video.currentTime !== lastVideoTime) {
-          lastVideoTime = video.currentTime;
-          const results = handLandmarker.detectForVideo(video, now);
-          renderOverlay(results);
-
-          if (results && results.landmarks && results.landmarks.length) {
-            statusEl.textContent = "손 인식됨: " + results.landmarks.length;
-            results.landmarks.forEach((lm, i) => {
-              const ht = detectPinchType(lm); // null | index | middle | ring | pinky
-
-              // 핀치 이벤트(상승 에지) 처리
-              if (handState[i].prevPinch === null && ht !== null) {
-                if (ht === "middle") {
-                  // 지우개 토글
-                  setEraser(!eraserOn);
-                } else if (ht === "ring") {
-                  undo();
-                } else if (ht === "pinky") {
-                  cycleColor();
-                }
-              }
-
-              // 드로잉 핀치 지속 처리
-              if (ht === "index") {
-                handState[i].drawing = true;
-                const tip = normalizedToPixel(lm[8]); // 검지 끝
-                // mirror가 적용돼 있으니 x를 좌우 반전해서 그림 좌표도 일치시킴
-                const rect = video.getBoundingClientRect();
-                const mirroredX = rect.width - tip.x;
-                pushStrokePoint(mirroredX, tip.y, COLORS[colorIndex], eraserOn ? eraserSize : brushSize, eraserOn);
-              } else {
-                if (handState[i].drawing) {
-                  // 핀치 종료 → 스트로크 고정
-                  sealStroke();
-                }
-                handState[i].drawing = false;
-              }
-
-              handState[i].prevPinch = ht;
-            });
-          } else {
-            statusEl.textContent = "손을 화면에 비춰주세요";
-            // 진행 중이면 스트로크 닫기
-            handState.forEach(s => { if (s.drawing) sealStroke(); s.drawing = false; s.prevPinch = null; });
+            if(pinch==='index'){
+              addPointKey(key, pIdx);
+            }
+          }else{
+            firedOnce.delete(key);
+            if(currentStroke[key]) endStrokeKey(key);
+            lastPinch[key]=null;
           }
         }
-        requestAnimationFrame(loop);
-      };
-      requestAnimationFrame(loop);
+      }else{
+        hideCursors();
+        Object.keys(currentStroke).forEach(k=>{ if(currentStroke[k]) endStrokeKey(k); });
+      }
     }
+  }
+  (video.requestVideoFrameCallback ? video.requestVideoFrameCallback(step) : requestAnimationFrame(step));
+}
 
-    main();
-  </script>
+/* Boot */
+(async function main(){
+  setCanvasSize();
+  await initCam();
+  await loadLib();
+  running=true;
+  (video.requestVideoFrameCallback ? video.requestVideoFrameCallback(step) : requestAnimationFrame(step));
+})();
+</script>
 </body>
 </html>
